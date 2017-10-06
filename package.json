@@ -1,0 +1,14 @@
+{
+  "name": "passportreader",
+  "version": "1.0.0",
+  "description": "Read Personal Information from Passport",
+  "main": "example.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "passport"
+  ],
+  "author": "Jingli Cai",
+  "license": "ISC"
+}
