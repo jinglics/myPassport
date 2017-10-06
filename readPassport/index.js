@@ -12,23 +12,27 @@ const female = 'FITPR'
 
 function countryConfirm(countryCode)
 {
+  countryCode.forEach((code, i) => {
     let parseCode = ''
-    countryCode.split('').forEach(c => {
-      if (c >= 'A' || c <= 'Z')
-          parseCode += c
+    code.split('').forEach(c => {
+    if (c >= 'A' && c <= 'Z')
+      parseCode += c
     })
     if (iso3.findIndex(iso => iso === parseCode))
-        return parseCode;
-    else {
-      let sim = -0.1, code = ''
-      iso3.forEach(iso => {
-        if (stringSimilarity.compareTwoStrings(parseCode, iso) > sim) {
-          sim = stringSimilarity.compareTwoStrings(parseCode, iso)
-          code = iso
-        }
-      })
-      return code
-    }
+    return parseCode;
+    countryCode[i] = parseCode
+  })
+
+  let sim = -0.1, code = ''
+  countryCode.forEach(parseCode => {
+    iso3.forEach(iso => {
+      if (iso.length === 3 && stringSimilarity.compareTwoStrings(parseCode, iso) > sim) {
+        sim = stringSimilarity.compareTwoStrings(parseCode, iso)
+        code = iso
+      }
+    })
+  })
+  return code
 }
 
 function nameConfirm(name)
@@ -76,7 +80,12 @@ function passportParse(passport)
     passport = d2l[passport[0]] + passport.substr(1)
     //console.log(passport[0])
   }
-  return passport
+  let parsePass = ''
+  passport.split('').forEach(p => {
+    if ((p >= '0' && p <= '9') || (p >= 'A' && p <= 'Z'))
+      parsePass += p
+  })
+  return parsePass
 }
 
 function passporttypeConfirm(type)
@@ -122,7 +131,7 @@ function readPassportfromPNG(passport, cbk)
       if (parseFloat(resMap['valid_score']) < 30.0)
         cbk(new Error('unable recognize'))
       let initialRes = {}
-      initialRes['nationality'] = countryConfirm(resMap['country'])
+      initialRes['nationality'] = countryConfirm([resMap['country'], resMap['nationality']])
       initialRes['name'] = nameConfirm(resMap['names'] + ' ' + resMap['surname']);
       initialRes['passport_number'] = passportParse(resMap['number'])
       initialRes['passport_type'] = passporttypeConfirm(resMap['type'])

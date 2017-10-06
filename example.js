@@ -1,6 +1,7 @@
 const { readPassport } = require('./readPassport')
 
-readPassport('/home/jingli/p2.png', (err, res) => {
+readPassport(process.argv[2], (err, res) => {
     if(err) console.error(err)
     else console.log(res)
 })
+
