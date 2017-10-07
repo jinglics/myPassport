@@ -38,7 +38,7 @@ function countryConfirm(countryCode)
 function nameConfirm(name)
 {
   let parseName = ''
-  name = name.replace(/  +/g, ' ');
+  name = name.replace(/  +/g, ' ').trim();
   name.split('').forEach(c => {
     if ((c >= 'A' && c <= 'Z') || c === ' ')
       parseName += c
@@ -116,7 +116,7 @@ function sexConfirm(sex)
 
 function readPassportfromPNG(passport, cbk)
 {
- execFile('/home/jingli/.local/bin/mrz', [passport], (error, stdout, stderr) => {
+  execFile(process.env.HOME + '/.local/bin/mrz', [passport], (error, stdout, stderr) => {
     if (error) {
       cbk(error)
     }
@@ -128,17 +128,24 @@ function readPassportfromPNG(passport, cbk)
         if (ele[0].length)
           resMap[ele[0]] = ele[1]
       })
-      if (parseFloat(resMap['valid_score']) < 30.0)
-        cbk(new Error('unable recognize'))
-      let initialRes = {}
-      initialRes['nationality'] = countryConfirm([resMap['country'], resMap['nationality']])
-      initialRes['name'] = nameConfirm(resMap['names'] + ' ' + resMap['surname']);
-      initialRes['passport_number'] = passportParse(resMap['number'])
-      initialRes['passport_type'] = passporttypeConfirm(resMap['type'])
-      initialRes['date_of_birth'] = dateConvert(resMap['date_of_birth'], 0)
-      initialRes['expiration_date'] = dateConvert(resMap['expiration_date'], 1)
-      initialRes['sex'] = sexConfirm(resMap['sex'])
-      cbk(null, initialRes)
+      if (parseFloat(resMap['valid_score']) <= 1)
+      {
+        tesseractRead(passport, (err, data) => {
+          if (err) return cbk(new Error('unable recognize'))
+          else cbk(null, data)
+        })
+      } else {
+        let initialRes = {}
+        initialRes['nationality'] = countryConfirm([resMap['country'], resMap['nationality']])
+        initialRes['surname'] = nameConfirm(resMap['surname']);
+        initialRes['names'] = nameConfirm(resMap['names']);
+        initialRes['passport_number'] = passportParse(resMap['number'])
+        initialRes['passport_type'] = passporttypeConfirm(resMap['type'])
+        initialRes['date_of_birth'] = dateConvert(resMap['date_of_birth'], 0)
+        initialRes['expiration_date'] = dateConvert(resMap['expiration_date'], 1)
+        initialRes['sex'] = sexConfirm(resMap['sex'])
+        cbk(null, initialRes)
+      }
     }
   })
 }
@@ -171,5 +178,97 @@ function readPassport(passport, cbk)
   }
 }
 
+function checkDate(dates)
+{
+  const mul = [7, 3, 1]
+  let res = ''
+  for (var j = 0; j < dates.length; j++)
+  {
+    date = dates[j]
+    let sum = 0
+    for (var i = 0; i < date.length; i++)
+    {
+      let v = 0
+      if(date[i] === '<') v = 0;
+      else if (date[i] >= 'A' && date[i] <= 'Z')
+        v = date[i] - 'A'+ 10
+      else v = date[i] - '0'
+      sum += v * mul[i%3]
+    }
+    if (sum % 10 === dates[6]) {
+      res = date.substr(0, 6)
+      break
+    }
+  }
+  if (res === '')
+    res = dates[0]
+  return res
+}
+
+function tesseractRead(passport, cbk)
+{
+  const { exec } = require('child_process')
+  //-c tessedit_char_whitelist=1234567890QWERTYUIOPLKJHGFDSAZXVBNM\\<"
+  exec('tesseract ' + passport + " stdout", (error, stdout, stderr) => {
+    if (error) cbk(error)
+    else {
+      let r = stdout.split('\n')
+      let cand = []
+      for (var i = r.length - 1; i >= 0; i--) {
+          let tmp = r[i].replace(/ /g,'')
+          if (tmp.indexOf('<') !== -1 && tmp.length > 40) {
+             cand.push(tmp)
+             if (cand.length >= 2)
+               break
+          }
+      }
+      if (cand.length < 2) cbk(new Error("unable recognize"))
+      let initialRes = {}
+      initialRes['nationality'] = countryConfirm([cand[1].substr(2, 3)])
+      initialRes['passport_type'] = passporttypeConfirm(cand[1].substr(0, 2))
+      let surname = '', names = ''
+      let n = ''
+      for (var i = 5; i < cand[1].length; i++) {
+          if (cand[1][i] !== '<')
+              n += cand[1][i]
+          else if (cand[1][i] === '<' && i + 1 < cand[1].length && cand[1][i+1] === '<')
+          {
+            if (surname.length === 0)
+              surname = n
+            else {
+              names = n
+              break
+            }
+            n = ''
+          } else {
+              n += ' '
+          }
+      }
+      initialRes['surname'] = nameConfirm(surname);
+      initialRes['names'] = nameConfirm(names);
+      initialRes['passport_number'] = passportParse(cand[0].substr(0, 9))
+      let birth = [cand[0].substr(13, 7), cand[0].substr(12, 7), cand[0].substr(14, 7)]
+      let expire = [cand[0].substr(21, 7), cand[0].substr(20, 7), cand[0].substr(22, 7)]
+      initialRes['date_of_birth'] = dateConvert(checkDate(birth),  0)
+      initialRes['expiration_date'] = dateConvert(checkDate(expire), 1)
+      let sex = ''
+      if (cand[1][20] === 'M' || cand[1][20] == 'F')
+         sex = cand[1][20]
+      else {
+          if (cand[1][19] === 'M' || cand[1][19] == 'F')
+              sex = cand[1][19]
+          if (cand[1][21] === 'M' || cand[1][21] == 'F')
+              sex = cand[1][21]
+          if (sex.length === 0)
+              sex = cand[1][20]
+      }
+      initialRes['sex'] = sexConfirm(sex)
+
+      cbk(null, initialRes)
+    }
+  })
+}
+
+//exports.readPassport = tesseractRead
 exports.readPassport = readPassport
 
